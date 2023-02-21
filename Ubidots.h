@@ -20,6 +20,7 @@ public:
   	bool send(const char* deviceLabel);
   	bool send(const char* deviceLabel, const char* deviceName);
   	bool serverConnected();
+	bool connected();
   	double get(const char *deviceLabel, const char *variableLabel);
   	void add(const char *variableLabel, double value, char *context, unsigned long dotTimestampSeconds, unsigned int dotTimestampSecondsMillis);
   	void add(const char *variableLabel, double value, char *context, unsigned long dotTimestampSeconds);

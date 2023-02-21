@@ -16,6 +16,7 @@ public:
 
 
     bool connect();
+    bool connected();
     bool reconnect();
     bool sendHttp(const char *device_label, const char *deviceName, const char *payload);
     bool sendTcp(const char *device_label, const char *deviceName, const char *payload);
@@ -86,12 +87,17 @@ bool UbiESP32::connect()
 
 bool UbiESP32::serverConnected()
 {
-    return true;
+    return false;
+}
+
+bool UbiESP32::connected()
+{
+    return _client->connected();
 }
 
 bool UbiESP32::reconnect()
 {
-    return true;
+    return connect();
 }
 
 

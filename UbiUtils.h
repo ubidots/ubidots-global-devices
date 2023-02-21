@@ -22,7 +22,6 @@ public:
     static bool preConnectionChecks(Callable &client, unsigned long &timerToSync, SyncronizeTime& syncronizeTime, const bool &debug = false);
     template <typename Callable>
     static void loadCerts(Callable &client, const unsigned char cert1[], const unsigned int& size1, const unsigned char cert2[], const unsigned int& size2, const bool &debug = false);
-    static bool syncronizeTime(const bool &debug = false);
 
     static int hexadecimalToDecimal(char hexVal[]);
     static void buildTcpPayload(char *payload, const char *token, const char *deviceLabel, const char *deviceName, const char *userAgent, int8_t &currentValue, Value *dots, const bool &debug);
@@ -86,6 +85,7 @@ bool UbiUtils::waitServerAnswer(Callable &client, const bool &debug)
 template <typename Callable>
 float UbiUtils::parseTCPAnswer(const char *requestType, char *response, Callable client, const bool &debug)
 {
+    uint32_t retries{10};
     int j = 0;
 
     if (debug)
@@ -94,6 +94,11 @@ float UbiUtils::parseTCPAnswer(const char *requestType, char *response, Callable
         Serial.println(F("Server's response:"));
     }
 
+    while(!client.available() && retries)
+    {
+        delay(1000);
+        retries--;
+    }
     while (client.available())
     {
         char c = client.read();

@@ -28,7 +28,7 @@ void UbiDevice::buildProtocolHandlerInstance(const IotProtocol& protocol)
 {
 	if(protocol == UBI_HTTP || protocol == UBI_HTTPS)
    		this->_protocolHandler = reinterpret_cast<UbiProtocolHandler*>(new ProtocolHandler<UBI_HTTP>(protocol));
-	else if(protocol == UBI_TCP)
+	else if(protocol == UBI_TCP || protocol == UBI_TCPS)
    		this->_protocolHandler = reinterpret_cast<UbiProtocolHandler*>(new ProtocolHandler<UBI_TCP>(protocol));
 	else if(protocol == UBI_UDP)
    		this->_protocolHandler = reinterpret_cast<UbiProtocolHandler*>(new ProtocolHandler<UBI_UDP>(protocol));
@@ -58,6 +58,10 @@ bool UbiProtocolHandler::connect()
 	return device->connect();
 }
 
+bool UbiProtocolHandler::connected()
+{
+	return device->connected();
+}
 bool UbiProtocolHandler::reconnect()
 {
    return device->reconnect(); 

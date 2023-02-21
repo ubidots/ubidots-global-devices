@@ -11,6 +11,7 @@ class UbiProtocolHandler
         virtual ~UbiProtocolHandler() { delete _dots; };
 
         bool connect();
+        bool connected();
         bool reconnect();
         bool serverConnected();
 		void setDebug(const bool& debug);

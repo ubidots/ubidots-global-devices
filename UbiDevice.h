@@ -44,6 +44,7 @@ private:
     virtual bool connect() = 0;
     virtual bool reconnect() = 0;
     virtual bool serverConnected() = 0;
+    virtual bool connected() = 0;
     virtual void init() = 0;
     virtual bool sendHttp(const char *deviceLabel, const char *deviceName, const char *payload) = 0;
     virtual bool sendTcp(const char *deviceLabel, const char *deviceName, const char *payload) = 0;
@@ -90,11 +91,11 @@ bool ProtocolHandler<Protocol>::send(const char *deviceLabel, const char *device
 {
     char* payload = (char*) malloc(sizeof(char) * MAX_BUFFER_SIZE);
     
-    if constexpr(Protocol ==  UBI_HTTP)
+    if constexpr(Protocol ==  UBI_HTTP || Protocol == UBI_HTTPS)
     {
         UbiUtils::buildHttpPayload(payload, _currentValue, _dots, _debug);
     }
-    else if constexpr(Protocol == UBI_TCP || Protocol == UBI_UDP)
+    else if constexpr(Protocol == UBI_TCP || Protocol == UBI_TCPS || Protocol == UBI_UDP)
     {
         UbiUtils::buildTcpPayload(payload, device->_token, deviceLabel, deviceName, device->_userAgent, _currentValue, _dots,_debug);
     }
@@ -104,11 +105,11 @@ bool ProtocolHandler<Protocol>::send(const char *deviceLabel, const char *device
 
     bool result{false};
     
-    if constexpr(Protocol ==  UBI_HTTP)
+    if constexpr(Protocol ==  UBI_HTTP || Protocol == UBI_HTTPS)
     {
         result = device->sendHttp(deviceLabel, deviceName, payload);
     }
-    else if constexpr(Protocol == UBI_TCP)
+    else if constexpr(Protocol == UBI_TCP || Protocol == UBI_TCPS)
     {
         result = device->sendTcp(deviceLabel, deviceName, payload);
     }
@@ -135,9 +136,9 @@ template <IotProtocol Protocol>
 double ProtocolHandler<Protocol>::get(const char *device_label, const char *variable_label)
 {
     double value{ERROR_VALUE};
-    if constexpr(Protocol ==  UBI_HTTP)
+    if constexpr(Protocol ==  UBI_HTTP || Protocol == UBI_HTTPS)
         value = device->getHttp(device_label, variable_label);
-    if constexpr(Protocol ==  UBI_TCP)
+    if constexpr(Protocol ==  UBI_TCP || Protocol == UBI_TCPS)
         value = device->getTcp(device_label, variable_label);
     if constexpr(Protocol ==  UBI_UDP)
         Serial.println("ERROR, data retrieval is only supported using TCP or HTTP protocols");

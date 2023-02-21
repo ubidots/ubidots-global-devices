@@ -59,6 +59,10 @@ bool Ubidots::serverConnected()
 	return device->_protocolHandler->serverConnected();
 }
 
+bool Ubidots::connected()
+{
+	return device->_protocolHandler->connected();
+}
 unsigned int Ubidots::getPort(const IotProtocol &protocol)
 {
 	uint32_t port = 0;
@@ -75,6 +79,9 @@ unsigned int Ubidots::getPort(const IotProtocol &protocol)
 		break;
 	case UBI_HTTPS:
 		port = UBIDOTS_HTTPS_PORT;
+		break;
+	case UBI_TCPS:
+		port = UBIDOTS_TCPS_PORT;
 		break;
 	}
 	return port;

@@ -2,6 +2,7 @@
 #define __UBIESP8266_H__
 
 #include <ESP8266WiFi.h>
+#include <WiFiUdp.h>
 #include "../UbiDevice.h"
 
 class UbiESP8266 : public UbiDevice
@@ -13,6 +14,7 @@ public:
 
     bool connect();
     bool reconnect();
+    bool connected();
     bool sendHttp(const char *device_label, const char *deviceName, const char *payload);
     bool sendTcp(const char *device_label, const char *deviceName, const char *payload);
     bool sendUdp(const char *device_label, const char *deviceName, const char *payload);
@@ -31,6 +33,7 @@ protected:
     WiFiClientSecure _secureClient;
     WiFiClient _nonSecureClient;
     WiFiClient* _client;
+    WiFiUDP _udpClient;
     Session _session;
     X509List _certs;
     int _timeout{5000};
@@ -38,15 +41,16 @@ protected:
 
 private:
     UbiESP8266();
+    static bool syncronizeTime(const bool& debug);
 };
 
 #ifndef _ONLY_DECLARATIONS_
 
 void UbiESP8266::init()
 {
-    if(_protocol == UBI_HTTPS)
+    if(_protocol == UBI_HTTPS || _protocol == UBI_TCPS)
     {
-        UbiUtils::syncronizeTime(_debug);
+        syncronizeTime(_debug);
         _secureClient.setSession(&_session);
         UbiUtils::loadCerts(_certs, UBI_CA_CERT_1, UBI_CA_CERT_LEN_1, UBI_CA_CERT_2, UBI_CA_CERT_LEN_2, _debug);
         _secureClient.setTrustAnchors(&_certs);
@@ -86,7 +90,7 @@ bool UbiESP8266::connect()
 
     if (_debug)
     {
-        Serial.print("\nconnecting esp32 cam to local WiFi: ");
+        Serial.print("\nconnecting esp8266 to local WiFi: ");
         Serial.println(_ssid);
     }
     WiFi.begin(_ssid, _password);
@@ -114,6 +118,10 @@ bool UbiESP8266::connect()
 }
 
 bool UbiESP8266::serverConnected()
+{
+    return false;
+}
+bool UbiESP8266::connected()
 {
     return _client->connected();
 }
@@ -145,7 +153,7 @@ bool UbiESP8266::reconnect()
 bool UbiESP8266::sendHttp(const char *device_label, const char *deviceName, const char *payload)
 {
     if(_protocol == UBI_HTTPS)
-        if (!UbiUtils::preConnectionChecks(_certs, _timerToSync, UbiUtils::syncronizeTime, _debug))
+        if (!UbiUtils::preConnectionChecks(_certs, _timerToSync, syncronizeTime, _debug))
             return false;
 
     if (!_client->connected())
@@ -212,26 +220,222 @@ bool UbiESP8266::sendHttp(const char *device_label, const char *deviceName, cons
     }
     _client->stop();
     return result;
-    return true;
 }
 
 bool UbiESP8266::sendTcp(const char *device_label, const char *deviceName, const char *payload)
 {
-    return true;
+    if(_protocol == UBI_TCPS)
+        if (!UbiUtils::preConnectionChecks(_certs, _timerToSync, syncronizeTime, _debug))
+            return false;
+    
+    if (!_client->connected())
+    {
+        if (_debug)
+        {
+            Serial.println("Server not connected!!!");
+            Serial.print("Trying to reconnect to host: ");
+            Serial.println(_host);
+            Serial.print(F("On Port: "));
+            Serial.println(_port);
+        }
+        if (!reconnect())
+        {
+            if (_debug)
+                Serial.println("Reconnection failed");
+            return false;
+        }
+    }
+    _client->print(payload);
+
+    if (!UbiUtils::waitServerAnswer(*_client, _debug))
+    {
+        if (_debug)
+        {
+            Serial.println("[ERROR] Could not read server's response");
+        }
+        _client->flush();
+        _client->stop();
+        return false;
+    }
+
+    /* Parses the host answer, returns true if it is 'Ok' */
+    char *response = (char *)malloc(sizeof(char) * 100);
+    float value = UbiUtils::parseTCPAnswer("POST", response, *_client, _debug);
+    free(response);
+    if (value != ERROR_VALUE)
+    {
+        _client->flush();
+        _client->stop();
+        return true;
+    }
+    _client->flush();
+    _client->stop();
+    return false;
 }
+
 bool UbiESP8266::sendUdp(const char *device_label, const char *deviceName, const char *payload)
 {
+    if (!connected())
+    {
+        if (_debug)
+        {
+            Serial.println("Server not connected!!!");
+            Serial.print("Trying to reconnect to host: ");
+            Serial.println(_host);
+            Serial.print(F("On Port: "));
+            Serial.println(_port);
+        }
+        if (!reconnect())
+        {
+            if (_debug)
+                Serial.println("Reconnection failed");
+            return false;
+        }
+    }
+
+    if (_debug)
+        Serial.println("\nStarting connection to server...");
+        
+    _udpClient.begin(UBIDOTS_TCP_PORT);
+    if (!(_udpClient.beginPacket(_host, _port) && _udpClient.write(payload, strlen(payload)) && _udpClient.endPacket()))
+    {
+        if (_debug)
+            Serial.println("ERROR sending values with UDP");
+        _udpClient.stop();
+        return false;
+    }
+    _udpClient.stop();
     return true;
 }
 double UbiESP8266::getHttp(const char *device_label, const char *variable_label)
 {
+    if(_protocol == UBI_HTTPS)
+        if (!UbiUtils::preConnectionChecks(_certs, _timerToSync, syncronizeTime, _debug))
+            return ERROR_VALUE;
+    
+    if(!connected())
+    {
+        if(!reconnect())
+        {
+            if(_debug)
+                Serial.println("Failed to reconnect. Returning ERROR_VALUE");
+            return ERROR_VALUE;
+        }
+    }
+    
+    if (_debug)
+    {
+        Serial.println("\nGetting data from: ");
+        Serial.print(_host);
+        Serial.print("\n");
+    } 
 
-    return 99;
+    uint16_t pathLength = UbiUtils::getPathLength(device_label, variable_label);
+    char *path = (char *)malloc(sizeof(char) * pathLength + 1);
+    sprintf(path, "/api/v1.6/devices/%s/%s/lv", device_label, variable_label);
+    if (_debug)
+    {
+        Serial.print(F("\nRequesting to URL: "));
+        Serial.println(path);
+    }
+
+    uint16_t requestLineLength = UbiUtils::getRequestLength(path, _host, _token, _userAgent);
+    char *message = (char *)malloc(sizeof(char) * requestLineLength + 1);
+    sprintf(message,
+            "GET %s HTTP/1.1\r\nHost: %s\r\nX-Auth-Token: "
+            "%s\r\nUser-Agent: %s\r\nContent-Type: "
+            "application/json\r\nConnection: close\r\n\r\n",
+            path, _host, _token, _userAgent);
+
+    if (_debug)
+    {
+        Serial.println(F("Request sent"));
+        Serial.println(message);
+    }
+
+    _client->print(message);
+    Serial.println(message);
+
+    while (_client->connected())
+    {
+        if (_client->available())
+        {
+            String line = _client->readStringUntil('\n');
+            if (line == "\r")
+            {
+                break;
+            }
+        }
+    }
+
+    free(message);
+    free(path);
+    double value = UbiUtils::parseServerAnswer(*_client, _debug);
+
+    _client->flush();
+    _client->stop();
+    return value;
 }
-double UbiESP8266::getTcp(const char *device_label, const char *variable_label)
+double UbiESP8266::getTcp(const char *deviceLabel, const char *variableLabel)
 {
-    return 99;
+    if(_protocol == UBI_TCPS)
+        if (!UbiUtils::preConnectionChecks(_certs, _timerToSync, syncronizeTime, _debug))
+            return ERROR_VALUE;
+
+    if (!connected())
+    {
+        if (_debug)
+        {
+            Serial.println("Server not connected!!!");
+            Serial.print("Trying to reconnect to host: ");
+            Serial.println(_host);
+            Serial.print(F("On Port: "));
+            Serial.println(_port);
+        }
+        if (!reconnect())
+        {
+            if (_debug)
+                Serial.println("Reconnection failed");
+            return ERROR_VALUE;
+        }
+    }
+    
+    _client->print(_userAgent);
+    _client->print("|LV|");
+    _client->print(_token);
+    _client->print("|");
+    _client->print(deviceLabel);
+    _client->print(":");
+    _client->print(variableLabel);
+    _client->print("|end");
+
+    if (_debug)
+    {
+        Serial.println("----");
+        Serial.println("Payload for request:");
+        Serial.print(_userAgent);
+        Serial.print("|LV|");
+        Serial.print(_token);
+        Serial.print("|");
+        Serial.print(deviceLabel);
+        Serial.print(":");
+        Serial.print(variableLabel);
+        Serial.print("|end");
+        Serial.println("\n----");
+    }
+    if (!UbiUtils::waitServerAnswer(*_client, _debug))
+    {
+        return ERROR_VALUE;
+    }
+
+    char *response = (char *)malloc(sizeof(char) * 100);
+    float value = UbiUtils::parseTCPAnswer("LV", response, *_client, _debug);
+    _client->flush();
+    _client->stop();
+    free(response);
+    return value;
 }
+
 void UbiESP8266::getUniqueID(char *ID)
 {
     if (_debug)
@@ -248,6 +452,46 @@ void UbiESP8266::getUniqueID(char *ID)
         Serial.println("Done! MAC is: ");
         Serial.println(ID);
     }
+}
+
+
+bool UbiESP8266::syncronizeTime(const bool& debug)
+{
+	if(debug)
+	{
+        Serial.print(F("Setting time using SNTP"));
+    }
+    configTime(8 * 3600, 0, NTP_SERVER, NIST_SERVER);
+    time_t now = time(nullptr);
+    uint8_t attempts = 0;
+    while (now < 8 * 3600 * 2 && attempts <= 5)
+    {
+        if (debug)
+        {
+            Serial.print(".");
+        }
+        now = time(nullptr);
+        attempts += 1;
+        delay(500);
+    }
+
+    if (attempts > 5)
+    {
+        if (debug)
+        {
+            Serial.println(F("[ERROR] Could not set time using remote SNTP to verify Cert"));
+        }
+        return false;
+    }
+
+    struct tm timeinfo;
+    gmtime_r(&now, &timeinfo);
+    if (debug)
+    {
+        Serial.print(F("Current time: "));
+        Serial.print(asctime(&timeinfo));
+    }
+    return true;
 }
 
 #endif

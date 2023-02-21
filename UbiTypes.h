@@ -45,7 +45,7 @@ typedef char *hostUrl;
 typedef char *userAgent;
 typedef unsigned int portNumber;
 
-typedef enum { UBI_HTTP, UBI_TCP, UBI_UDP, UBI_HTTPS } IotProtocol;
+typedef enum { UBI_HTTP, UBI_TCP, UBI_TCPS, UBI_UDP, UBI_HTTPS } IotProtocol;
 typedef enum {UBI_WIFI, UBI_ETHERNET, UBI_GSM} IotClient;
 typedef enum {UBI_ESP32, UBI_ARDUINO_MKR_1400_GSM, UBI_ESP8266} supportedDevices;
 

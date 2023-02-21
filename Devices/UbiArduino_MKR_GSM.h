@@ -11,6 +11,7 @@ public:
     ~UbiArduino_MKR_GSM();
 
     bool connect();
+    bool connected();
     bool reconnect();
     bool sendHttp(const char *device_label, const char *deviceName, const char *payload);
     bool sendTcp(const char *device_label, const char *deviceName, const char *payload);
@@ -24,10 +25,6 @@ public:
     friend class UbiUtils;
 
 protected:
-    // bool waitServerAnswer();
-    // double parseServerAnswer();
-    // float parseTCPAnswer(const char *request_type, char *response);
-    // void parsePartialServerAnswer(char *_serverResposne);
 
     char *_APN;
     char *_login;
@@ -128,8 +125,14 @@ bool UbiArduino_MKR_GSM::reconnect()
 }
 bool UbiArduino_MKR_GSM::serverConnected()
 {
+    return false;
+}
+
+bool UbiArduino_MKR_GSM::connected()
+{
     return _client.connected();
 }
+
 bool UbiArduino_MKR_GSM::sendHttp(const char *deviceLabel, const char *deviceName, const char *payload)
 {
     bool retVal{false};
@@ -248,9 +251,10 @@ bool UbiArduino_MKR_GSM::sendTcp(const char *deviceLabel, const char *deviceName
 }
 bool UbiArduino_MKR_GSM::sendUdp(const char *deviceLabel, const char *deviceName, const char *payload)
 {
-    unsigned int localPort{2390};
+    //unsigned int localPort{2390};
+    unsigned int localPort{UBIDOTS_TCP_PORT};
 
-    if (!serverConnected())
+    if (!connected())
     {
         if (_debug)
         {
@@ -285,7 +289,7 @@ bool UbiArduino_MKR_GSM::sendUdp(const char *deviceLabel, const char *deviceName
 
 double UbiArduino_MKR_GSM::getTcp(const char *deviceLabel, const char *variableLabel)
 {
-    if (!serverConnected())
+    if (!connected())
     {
         if (_debug)
         {
@@ -355,7 +359,7 @@ void UbiArduino_MKR_GSM::getUniqueID(char *ID)
 
 double UbiArduino_MKR_GSM::getHttp(const char *device_label, const char *variable_label)
 {
-    bool connected = serverConnected();
+    bool connected = connected();
     if (!connected)
     {
         Serial.println("not connected, returning an error :");
